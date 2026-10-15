@@ -1,0 +1,28 @@
+[project]
+name = "content-diet-dashboard"
+version = "0.1.0"
+description = "Track the YouTube videos and Instagram reels you watch, then chart, search and question your viewing history."
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Add a dependency in the phase that first needs it, not before (see docs/requirements.md).
+dependencies = [
+    # FR-01..03: metadata for YouTube and Instagram links, no API key
+    "yt-dlp>=2026.8.19",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["load_links"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets: never commit (NFR-01)
+.env
+*.env
+!.env.example
+
+# Personal watch history and generated stores: never commit (NFR-01)
+data/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/

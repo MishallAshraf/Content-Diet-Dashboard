@@ -1,0 +1,47 @@
+# CLAUDE.md
+
+Guidance for Claude Code when working in this repository.
+
+## What this is
+
+A personal tracker for YouTube videos and Instagram reels: capture links, fetch metadata and transcripts, classify them with an LLM, then show a dashboard, answer questions over transcripts (RAG) and run an agent over the stats. Solo project, runs locally.
+
+Requirements live in [docs/requirements.md](docs/requirements.md) with IDs (`FR-01`…, `NFR-01`…) and a status each. That file is the source of truth for scope and progress.
+
+## Commands
+
+```bash
+python -m venv .venv && .venv\Scripts\activate
+pip install -e ".[dev]"
+pytest                                    # offline, must pass before every commit
+python load_links.py --url "<link>"       # log one link
+python load_links.py --csv <file.csv>     # log a CSV of links
+```
+
+## Current state
+
+Phase 1 (capture) is built: `load_links.py` writes one JSON line per viewing to `data/watch_log.jsonl`. Next is FR-04, which replaces that file with SQLite tables `videos` and `watch_events`.
+
+Planned layout as phases land (create folders only when a phase needs them):
+
+```
+load_links.py        capture (Phase 1)
+store/               SQLite + Chroma access (FR-04, FR-08)
+ingest/              transcript, classify, embed (FR-05, FR-06, FR-08)
+features/            rag, agent, digest (FR-09..11)
+app.py, pages/       Streamlit dashboard and chat (FR-07, FR-09)
+```
+
+## Rules
+
+- **Work by requirement.** Every change implements or fixes a requirement ID. Update its status in `docs/requirements.md` in the same commit. A requirement is `passing` only when a test covers it; otherwise `built`.
+- **Commit messages start with the ID**, e.g. `FR-04: store watch events in SQLite`. Scaffolding and docs use `chore:` or `docs:`.
+- **Personal data never leaves the machine.** `data/` and `.env` are git-ignored. Never commit watch history, transcripts, databases or keys, and never print an API key.
+- **Tests run offline.** Stub yt-dlp, transcript APIs and LLM calls (see `tests/test_load_links.py` for the monkeypatch pattern).
+- **Add dependencies when a phase needs them**, in `pyproject.toml`, with a comment naming the requirement.
+- **Keep it small.** No speculative abstractions, no new folders before they hold code. Prefer plain functions and the standard library.
+- **yt-dlp:** extraction is metadata only (`skip_download`, `ignore_no_formats_error`). YouTube changes break it periodically; the first fix to try is `pip install -U yt-dlp`.
+
+## Stack (decided)
+
+Python 3.11 · yt-dlp · SQLite · Streamlit · Chroma · multilingual sentence-transformers (videos include Hindi/Hinglish) · Claude Haiku 5.5 for per-video classification, Claude Sonnet 5.5 for RAG answers, the agent and the digest.
