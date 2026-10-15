@@ -5,11 +5,10 @@ Usage:
     python load_links.py --csv my_links.csv
 
 The CSV needs a `url` column and may have a `watched_at` column (e.g. 2026-10-14 21:40).
-Each viewing is appended to data/watch_log.jsonl as one JSON line.
+Each viewing is saved to the SQLite database in data/content_diet.db.
 """
 import argparse
 import csv
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -17,8 +16,9 @@ from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 
+from store import db
+
 SUPPORTED_HOSTS = ("youtube.com", "youtu.be", "instagram.com")
-DEFAULT_OUT = Path(__file__).resolve().parent / "data" / "watch_log.jsonl"
 
 
 def is_supported(url):
@@ -80,26 +80,30 @@ def main(argv=None):
     src.add_argument("--url", help="a YouTube or Instagram link")
     src.add_argument("--csv", type=Path, help="CSV with a url column and optional watched_at")
     p.add_argument("--watched-at", help="when you watched it, e.g. 2026-10-14 21:40 (with --url)")
-    p.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    p.add_argument("--db", type=Path, default=db.DEFAULT_DB, help="SQLite file (default data/content_diet.db)")
     args = p.parse_args(argv)
     if args.csv and args.watched_at:
         p.error("--watched-at only works with --url; put times in the CSV's watched_at column")
 
     rows = read_csv(args.csv) if args.csv else [(args.url.strip(), args.watched_at)]
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    failed = 0
-    with open(args.out, "a", encoding="utf-8") as out:
-        for url, when in rows:
-            try:  # one bad link shouldn't stop a bulk import
-                rec = log_viewing(url, when)
-                out.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    conn = db.connect(args.db)
+    added = skipped = failed = 0
+    for url, when in rows:
+        try:  # one bad link shouldn't stop a bulk import
+            rec = log_viewing(url, when)
+            if db.save_viewing(conn, rec):
+                added += 1
                 print(f"  + {rec['title'] or url}  ({rec['watched_sec'] // 60} min)")
-            except Exception as e:
-                failed += 1
-                print(f"  x {url}\n      {str(e).splitlines()[0]}")
+            else:
+                skipped += 1
+                print(f"  = {rec['title'] or url}  (already logged at {rec['watched_at']})")
+        except Exception as e:
+            failed += 1
+            print(f"  x {url}\n      {str(e).splitlines()[0]}")
+    conn.close()
 
-    print(f"\nLogged {len(rows) - failed} of {len(rows)} link(s) to {args.out}")
+    print(f"\nAdded {added}, already logged {skipped}, failed {failed}. Database: {args.db}")
     return 1 if failed == len(rows) else 0
 
 

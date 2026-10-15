@@ -20,13 +20,18 @@ python load_links.py --csv <file.csv>     # log a CSV of links
 
 ## Current state
 
-Phase 1 (capture) is built: `load_links.py` writes one JSON line per viewing to `data/watch_log.jsonl`. Next is FR-04, which replaces that file with SQLite tables `videos` and `watch_events`.
+Phase 1 (capture) is done. `load_links.py` saves each viewing to SQLite at `data/content_diet.db` through `store/db.py`:
+
+- `videos`: one row per video, keyed by `video_id`; metadata is refreshed on every fetch. `tags` is a JSON list.
+- `watch_events`: one row per viewing, unique on `(video_id, watched_at)`, so rewatches add rows and re-imports don't.
+
+Next is Phase 2: FR-05 (transcripts), then FR-06 (LLM classification), which will add columns to `videos`.
 
 Planned layout as phases land (create folders only when a phase needs them):
 
 ```
 load_links.py        capture (Phase 1)
-store/               SQLite + Chroma access (FR-04, FR-08)
+store/db.py          SQLite schema and writes (FR-04); Chroma later (FR-08)
 ingest/              transcript, classify, embed (FR-05, FR-06, FR-08)
 features/            rag, agent, digest (FR-09..11)
 app.py, pages/       Streamlit dashboard and chat (FR-07, FR-09)

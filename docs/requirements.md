@@ -12,7 +12,7 @@ Change a status in the same commit as the code. Never delete a requirement; mark
 | FR-01 | Log a single YouTube or Instagram link, with an optional watched-at time (default: now). | passing |
 | FR-02 | Import a CSV of links with a `url` column and an optional `watched_at` column. | passing |
 | FR-03 | Subtract a `t=` start time (`40` or `40s`) from the duration to get watched seconds. | passing |
-| FR-04 | Store videos and watch events in SQLite (`videos`, `watch_events`), so rewatches count as new events. | todo |
+| FR-04 | Store videos and watch events in SQLite (`videos`, `watch_events`), so rewatches count as new events and re-importing the same viewing adds nothing. | passing |
 
 ## Phase 2: Understand
 
