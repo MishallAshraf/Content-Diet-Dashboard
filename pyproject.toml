@@ -22,6 +22,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["load_links"]
+packages = ["store"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
