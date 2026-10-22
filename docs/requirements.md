@@ -18,7 +18,8 @@ Change a status in the same commit as the code. Never delete a requirement; mark
 
 | ID | Requirement | Status |
 |---|---|---|
-| FR-05 | Fetch the transcript for each video: captions first, Whisper for reels without captions. | todo |
+| FR-05 | Fetch each YouTube video's captions once, with timestamps: manual over auto-generated, the video's own language first. Videos without captions are remembered, not re-fetched. | passing |
+| FR-13 | Transcribe Instagram reels and captionless videos with Whisper (split from FR-05). | deferred: needs PyTorch and audio downloads; revisit once reels are logged regularly |
 | FR-06 | Classify each video with an LLM into category, format, topic and intent, returned as JSON. | todo |
 
 ## Phase 3: Dashboard

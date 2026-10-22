@@ -24,15 +24,18 @@ Phase 1 (capture) is done. `load_links.py` saves each viewing to SQLite at `data
 
 - `videos`: one row per video, keyed by `video_id`; metadata is refreshed on every fetch. `tags` is a JSON list.
 - `watch_events`: one row per viewing, unique on `(video_id, watched_at)`, so rewatches add rows and re-imports don't.
+- `transcripts` (FR-05): one row per YouTube video, fetched by `ingest/transcript.py` right after the viewing is saved. `segments` is a JSON list of `{start, duration, text}`. A captionless video gets `language NULL, segments '[]'` so it isn't re-fetched. A failed fetch saves nothing and is retried on the next run. Instagram is skipped (FR-13, deferred).
 
-Next is Phase 2: FR-05 (transcripts), then FR-06 (LLM classification), which will add columns to `videos`.
+Captions for Hindi videos are auto-generated Hinglish in Devanagari script; the console is reconfigured with `errors="replace"` so printing them can't crash a run.
+
+Next is FR-06: LLM classification through the provider switch (see Stack), adding columns to `videos`.
 
 Planned layout as phases land (create folders only when a phase needs them):
 
 ```
 load_links.py        capture (Phase 1)
 store/db.py          SQLite schema and writes (FR-04); Chroma later (FR-08)
-ingest/              transcript, classify, embed (FR-05, FR-06, FR-08)
+ingest/transcript.py YouTube captions (FR-05); classify, embed later (FR-06, FR-08)
 features/            rag, agent, digest (FR-09..11)
 app.py, pages/       Streamlit dashboard and chat (FR-07, FR-09)
 ```
