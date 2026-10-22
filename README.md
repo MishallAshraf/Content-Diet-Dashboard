@@ -7,6 +7,7 @@ Track the YouTube videos and Instagram reels you watch, then chart where your ti
 ## Prerequisites
 
 - Python 3.11 or newer
+- From Phase 2 (classification) onwards: [Ollama](https://ollama.com) with a small model, e.g. `ollama pull phi4-mini`. LLM calls run locally by default; set `LLM_PROVIDER=anthropic` in `.env` to use Claude instead.
 
 ## Quickstart
 
