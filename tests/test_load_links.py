@@ -1,4 +1,6 @@
-"""Offline tests for load_links.py. yt-dlp is stubbed, so no network is used (NFR-04)."""
+"""Offline tests for load_links.py. yt-dlp and the transcript API are stubbed (NFR-04)."""
+import json
+
 import pytest
 
 import load_links
@@ -9,9 +11,33 @@ FAKE_META = {"video_id": "DCYaJb8Bzdk", "platform": "youtube", "title": "EP-1 Sy
              "tags": ["system design"], "description": ""}
 
 
+TRANSCRIPT = {"language": "hi", "is_generated": True,
+              "segments": [{"start": 0.4, "duration": 4.6, "text": "नमस्ते"}]}
+
+
+@pytest.fixture(autouse=True)
+def transcript_calls(monkeypatch):
+    """Stub the transcript API for every test (NFR-04) and record which videos were fetched."""
+    calls = []
+
+    def fake(video_id, language=None):
+        calls.append(video_id)
+        return TRANSCRIPT
+
+    monkeypatch.setattr(load_links, "fetch_transcript", fake)
+    return calls
+
+
 @pytest.fixture
 def fake_extract(monkeypatch):
     monkeypatch.setattr(load_links, "extract_metadata", lambda url: dict(FAKE_META, url=url))
+
+
+def transcripts(db_path):
+    conn = db.connect(db_path)
+    rows = [dict(r) for r in conn.execute("SELECT * FROM transcripts")]
+    conn.close()
+    return rows
 
 
 def events(db_path):
@@ -107,6 +133,49 @@ def test_fr03_missing_duration_fails_instead_of_logging_zero(monkeypatch, tmp_pa
     db_path = tmp_path / "t.db"
     assert load_links.main(["--url", "https://youtu.be/DCYaJb8Bzdk?t=40", "--db", str(db_path)]) == 1
     assert events(db_path) == []
+
+
+def test_fr05_transcript_fetched_once_per_video(fake_extract, transcript_calls, tmp_path):
+    db_path = tmp_path / "t.db"
+    for when in ("2026-10-14 21:40", "2026-10-15 08:00"):   # a rewatch
+        load_links.main(["--url", "https://youtu.be/DCYaJb8Bzdk", "--watched-at", when, "--db", str(db_path)])
+    [t] = transcripts(db_path)
+    assert transcript_calls == ["DCYaJb8Bzdk"]
+    assert t["language"] == "hi"
+    assert json.loads(t["segments"])[0]["text"] == "नमस्ते"
+
+
+def test_fr05_no_transcript_for_instagram(monkeypatch, transcript_calls, tmp_path):
+    monkeypatch.setattr(load_links, "extract_metadata",
+                        lambda url: dict(FAKE_META, platform="instagram", url=url))
+    load_links.main(["--url", "https://www.instagram.com/reel/abc/", "--db", str(tmp_path / "t.db")])
+    assert transcript_calls == []
+
+
+def test_fr05_transcript_failure_keeps_viewing_and_retries_next_run(fake_extract, monkeypatch, tmp_path):
+    def broken(video_id, language=None):
+        raise ConnectionError("SSL EOF")
+
+    monkeypatch.setattr(load_links, "fetch_transcript", broken)
+    db_path = tmp_path / "t.db"
+    args = ["--url", "https://youtu.be/DCYaJb8Bzdk", "--watched-at", "2026-10-14", "--db", str(db_path)]
+    assert load_links.main(args) == 0
+    assert len(events(db_path)) == 1 and transcripts(db_path) == []
+
+    monkeypatch.setattr(load_links, "fetch_transcript", lambda video_id, language=None: TRANSCRIPT)
+    load_links.main(args)                      # viewing already logged, transcript backfilled
+    assert len(events(db_path)) == 1 and len(transcripts(db_path)) == 1
+
+
+def test_fr05_video_without_captions_is_not_refetched(fake_extract, monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(load_links, "fetch_transcript",
+                        lambda video_id, language=None: calls.append(video_id))   # returns None
+    db_path = tmp_path / "t.db"
+    for when in ("2026-10-14", "2026-10-15"):
+        load_links.main(["--url", "https://youtu.be/DCYaJb8Bzdk", "--watched-at", when, "--db", str(db_path)])
+    assert calls == ["DCYaJb8Bzdk"]
+    assert transcripts(db_path)[0]["language"] is None
 
 
 def test_watched_at_with_csv_is_rejected(tmp_path):

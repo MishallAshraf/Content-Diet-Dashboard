@@ -54,6 +54,27 @@ def test_metadata_refreshes_on_new_fetch(tmp_path):
     assert conn.execute("SELECT title FROM videos").fetchone()[0] == "EP-1 (renamed)"
 
 
+def test_fr05_save_and_check_transcript(tmp_path):
+    conn = db.connect(tmp_path / "t.db")
+    db.save_viewing(conn, REC)
+    assert db.has_transcript(conn, "DCYaJb8Bzdk") is False
+    db.save_transcript(conn, "DCYaJb8Bzdk", {"language": "hi", "is_generated": True,
+                                             "segments": [{"start": 0.4, "duration": 4.6, "text": "नमस्ते"}]})
+    row = conn.execute("SELECT * FROM transcripts").fetchone()
+    assert db.has_transcript(conn, "DCYaJb8Bzdk") is True
+    assert row["language"] == "hi"
+    assert json.loads(row["segments"])[0]["text"] == "नमस्ते"
+
+
+def test_fr05_no_captions_is_remembered(tmp_path):
+    conn = db.connect(tmp_path / "t.db")
+    db.save_viewing(conn, REC)
+    db.save_transcript(conn, "DCYaJb8Bzdk", None)
+    row = conn.execute("SELECT language, segments FROM transcripts").fetchone()
+    assert db.has_transcript(conn, "DCYaJb8Bzdk") is True
+    assert (row["language"], row["segments"]) == (None, "[]")
+
+
 def test_data_survives_reconnect(tmp_path):
     path = tmp_path / "t.db"
     conn = db.connect(path)

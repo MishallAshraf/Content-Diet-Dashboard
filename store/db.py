@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS watch_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_watch_events_watched_at ON watch_events(watched_at);
+
+-- FR-05: one row per video. A video without captions gets a row with language NULL and
+-- segments '[]', so it isn't re-fetched on every run.
+CREATE TABLE IF NOT EXISTS transcripts (
+    video_id     TEXT PRIMARY KEY REFERENCES videos(video_id),
+    language     TEXT,
+    is_generated INTEGER,
+    segments     TEXT NOT NULL DEFAULT '[]',   -- JSON list of {start, duration, text}
+    fetched_at   TEXT NOT NULL
+);
 """
 
 
@@ -71,3 +81,20 @@ def save_viewing(conn, rec):
             rec,
         )
     return cur.rowcount == 1
+
+
+def has_transcript(conn, video_id):
+    """True once a transcript was fetched, or the video was found to have no captions."""
+    return conn.execute("SELECT 1 FROM transcripts WHERE video_id = ?", (video_id,)).fetchone() is not None
+
+
+def save_transcript(conn, video_id, transcript):
+    """Store a transcript from ingest.transcript, or None for a video without captions."""
+    t = transcript or {"language": None, "is_generated": None, "segments": []}
+    with conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO transcripts (video_id, language, is_generated, segments, fetched_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (video_id, t["language"], t["is_generated"],
+             json.dumps(t["segments"], ensure_ascii=False), datetime.now().isoformat(timespec="seconds")),
+        )

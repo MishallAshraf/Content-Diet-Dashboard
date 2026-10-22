@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 
+from ingest.transcript import fetch_transcript
 from store import db
 
 SUPPORTED_HOSTS = ("youtube.com", "youtu.be", "instagram.com")
@@ -79,7 +80,26 @@ def read_csv(path):
                 for row in reader if (row["url"] or "").strip()]
 
 
+def add_transcript(conn, rec):
+    """FR-05: fetch captions once per YouTube video. Failing here never fails the viewing."""
+    if rec["platform"] != "youtube" or db.has_transcript(conn, rec["video_id"]):
+        return
+    try:
+        t = fetch_transcript(rec["video_id"], rec.get("language"))
+    except Exception as e:
+        print(f"      transcript failed, will retry next run: {str(e).splitlines()[0][:100]}")
+        return
+    db.save_transcript(conn, rec["video_id"], t)
+    if t:
+        kind = "auto" if t["is_generated"] else "manual"
+        print(f"      transcript: {t['language']} ({kind}), {len(t['segments'])} lines")
+    else:
+        print("      transcript: none (no captions)")
+
+
 def main(argv=None):
+    # Titles and transcripts can be in Devanagari, which the Windows console can't encode.
+    sys.stdout.reconfigure(errors="replace")
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--url", help="a YouTube or Instagram link")
@@ -103,6 +123,7 @@ def main(argv=None):
             else:
                 skipped += 1
                 print(f"  = {rec['title'] or url}  (already logged at {rec['watched_at']})")
+            add_transcript(conn, rec)  # also backfills videos logged before FR-05
         except Exception as e:
             failed += 1
             print(f"  x {url}\n      {str(e).splitlines()[0]}")
