@@ -49,4 +49,10 @@ app.py, pages/       Streamlit dashboard and chat (FR-07, FR-09)
 
 ## Stack (decided)
 
-Python 3.11 · yt-dlp · SQLite · Streamlit · Chroma · multilingual sentence-transformers (videos include Hindi/Hinglish) · Claude Haiku 5.5 for per-video classification, Claude Sonnet 5.5 for RAG answers, the agent and the digest.
+Python 3.11 · yt-dlp · SQLite · Streamlit · Chroma · multilingual sentence-transformers (videos include Hindi/Hinglish).
+
+**LLMs: local first, with a switch** (decided 2026-10-22).
+- Every LLM call goes through one function that reads `LLM_PROVIDER` from `.env`: `ollama` (default) or `anthropic`. Never call a provider directly from feature code.
+- Default local model: `phi4-mini` (3.8B) via Ollama. The dev machine is a 2015 dual-core laptop with 8 GB RAM and no GPU, so stay at 1–4B models and expect ~20–60 s per classification.
+- `anthropic` (Claude Haiku 5.5 / Sonnet 5.5) is the fallback if RAG answers or the agent are too slow or weak locally. Send only video content (title, tags, transcript), never watch times.
+- Ollama lives on `D:\Ollama` (`app\ollama.exe`, models in `D:\Ollama\models`). Start it with `OLLAMA_MODELS=D:\Ollama\models` set, then `D:\Ollama\app\ollama.exe serve`; it listens on `http://127.0.0.1:11434`.
