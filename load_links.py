@@ -34,17 +34,22 @@ def start_offset(url):
 
 def extract_metadata(url):
     # Metadata only: don't fail when YouTube hides the video formats.
+    # The connection to YouTube drops mid-request on this network (SSL EOF), so retry more
+    # than yt-dlp's default 3 times before giving up.
     opts = {"quiet": True, "no_warnings": True, "skip_download": True,
-            "noplaylist": True, "ignore_no_formats_error": True}
+            "noplaylist": True, "ignore_no_formats_error": True,
+            "retries": 10, "extractor_retries": 10}
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
+    if not info.get("duration"):  # YouTube sometimes returns partial info; don't log 0 minutes
+        raise ValueError("no duration returned; run again (already-logged links are skipped)")
     return {
         "video_id": info.get("id"),
         "platform": (info.get("extractor_key") or "").lower(),
         "url": info.get("webpage_url") or url,
         "title": info.get("title"),
         "channel": info.get("channel") or info.get("uploader"),
-        "duration_sec": info.get("duration") or 0,
+        "duration_sec": int(info["duration"]),
         "language": info.get("language"),
         "tags": info.get("tags") or [],
         "description": info.get("description") or "",
