@@ -96,6 +96,19 @@ def test_missing_title_does_not_crash(monkeypatch, tmp_path):
     assert len(events(db_path)) == 1
 
 
+def test_fr03_missing_duration_fails_instead_of_logging_zero(monkeypatch, tmp_path):
+    class PartialInfo:  # yt-dlp sometimes returns metadata without a duration
+        def __init__(self, opts): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def extract_info(self, url, download): return {"id": "DCYaJb8Bzdk", "title": "EP-1"}
+
+    monkeypatch.setattr(load_links.yt_dlp, "YoutubeDL", PartialInfo)
+    db_path = tmp_path / "t.db"
+    assert load_links.main(["--url", "https://youtu.be/DCYaJb8Bzdk?t=40", "--db", str(db_path)]) == 1
+    assert events(db_path) == []
+
+
 def test_watched_at_with_csv_is_rejected(tmp_path):
     with pytest.raises(SystemExit):
         load_links.main(["--csv", "x.csv", "--watched-at", "2026-10-14", "--db", str(tmp_path / "t.db")])
