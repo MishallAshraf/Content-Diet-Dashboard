@@ -11,6 +11,9 @@ dependencies = [
     "yt-dlp>=2026.8.19",
     # FR-05: YouTube captions with timestamps
     "youtube-transcript-api>=1.2.4",
+    # FR-07: dashboard (brings Altair for the charts)
+    "streamlit>=1.40",
+    "pandas>=2.2",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +30,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["load_links", "llm"]
+py-modules = ["load_links", "llm", "stats", "demo_data"]
 packages = ["store", "ingest"]
 
 [tool.pytest.ini_options]

@@ -17,6 +17,8 @@ pytest                                    # offline, must pass before every comm
 python load_links.py --url "<link>"       # log one link
 python load_links.py --csv <file.csv>     # log a CSV of links
 python -m ingest.classify                 # label unlabelled videos (Ollama must be running)
+python demo_data.py                       # sample data in data/demo.db
+streamlit run app.py [-- --db data/demo.db]  # dashboard
 ```
 
 ## Current state
@@ -33,7 +35,9 @@ Captions for Hindi videos are auto-generated Hinglish in Devanagari script; the 
 
 All LLM calls go through `llm.complete_json(prompt, schema)`. It raises `LLMError` for a bad answer about one item (skip it, carry on) and `LLMUnavailable` when the provider is down or not set up (stop the run).
 
-Next is FR-07: the Streamlit dashboard.
+- Dashboard (FR-07): `app.py` draws Altair charts from `stats.py`, plain pandas functions over `db.viewings()` so they test without Streamlit and the FR-10 agent can reuse them. `tests/test_app.py` renders the page with Streamlit's `AppTest`. `demo_data.py` fills `data/demo.db` with invented, pre-labelled viewings and refuses to touch the real database.
+
+Next is FR-08: transcript chunks embedded into Chroma.
 
 Planned layout as phases land (create folders only when a phase needs them):
 
@@ -44,7 +48,7 @@ llm.py               the single LLM entry point and provider switch (FR-06 onwar
 ingest/transcript.py YouTube captions (FR-05)
 ingest/classify.py   category / format / topic labels (FR-06); embed later (FR-08)
 features/            rag, agent, digest (FR-09..11)
-app.py, pages/       Streamlit dashboard and chat (FR-07, FR-09)
+app.py, stats.py     Streamlit dashboard and its numbers (FR-07); pages/ for chat (FR-09)
 ```
 
 ## Rules

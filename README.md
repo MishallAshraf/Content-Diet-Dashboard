@@ -2,7 +2,7 @@
 
 Track the YouTube videos and Instagram reels you watch, then chart where your time goes and ask questions about what you watched.
 
-> **Status: Phase 2 done.** `load_links.py` saves links with their metadata, watched time and YouTube captions to a local SQLite database, and `python -m ingest.classify` labels each video with a local LLM. The dashboard, RAG and the agent are not built yet. See [docs/requirements.md](docs/requirements.md).
+> **Status: Phase 3 done.** `load_links.py` saves links with their metadata, watched time and YouTube captions to a local SQLite database, `python -m ingest.classify` labels each video with a local LLM, and `streamlit run app.py` charts it. RAG and the agent are not built yet. See [docs/requirements.md](docs/requirements.md).
 
 ## Prerequisites
 
@@ -51,6 +51,21 @@ python -m ingest.classify
 
 Each video without labels gets a category (Learning, Entertainment, Fitness, News, Music, Other), a format (Lecture, Tutorial, Podcast…) and a short topic, saved in a `labels` table. With a small local model on a laptop CPU, expect about a minute for the first video while the model loads, then 10–30 seconds each. To use Claude instead, `pip install -e ".[anthropic]"`, then set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `.env`.
 
+## See the dashboard
+
+```bash
+streamlit run app.py
+```
+
+It opens in your browser at `http://localhost:8501` and shows time by category per day, your learning share by week, when you watch (hour by weekday), top creators and the YouTube/Instagram split, for the dates and platforms you pick in the sidebar. New links show up when you refresh the page.
+
+No history yet? Try it on four weeks of made-up viewings:
+
+```bash
+python demo_data.py
+streamlit run app.py -- --db data/demo.db
+```
+
 ## Layout
 
 | Path | Purpose |
@@ -59,6 +74,9 @@ Each video without labels gets a category (Learning, Entertainment, Fitness, New
 | `store/db.py` | SQLite schema (`videos`, `watch_events`, `transcripts`, `labels`) and writes. |
 | `ingest/transcript.py` | Fetch YouTube captions with timestamps, retrying dropped connections. |
 | `ingest/classify.py` | Label videos with category, format and topic. |
+| `app.py` | Streamlit dashboard. |
+| `stats.py` | The numbers behind the charts (pandas). |
+| `demo_data.py` | Builds `data/demo.db` with made-up, labelled viewings. |
 | `llm.py` | The single LLM entry point; `LLM_PROVIDER` switches between Ollama and Anthropic. |
 | `tests/` | Offline tests; yt-dlp is stubbed. |
 | `docs/requirements.md` | Numbered requirements and their status. |

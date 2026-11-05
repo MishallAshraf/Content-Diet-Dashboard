@@ -124,6 +124,19 @@ def save_labels(conn, video_id, labels, model):
         )
 
 
+def viewings(conn):
+    """FR-07: every watch event with its video and labels, oldest first.
+    Videos not classified yet get category 'Unlabelled'."""
+    rows = conn.execute(
+        """SELECT e.watched_at, e.watched_sec, v.video_id, v.platform, v.title, v.channel,
+                  COALESCE(l.category, 'Unlabelled') AS category, l.format, l.topic
+           FROM watch_events e
+           JOIN videos v USING (video_id)
+           LEFT JOIN labels l USING (video_id)
+           ORDER BY e.watched_at""").fetchall()
+    return [dict(r) for r in rows]
+
+
 def save_transcript(conn, video_id, transcript):
     """Store a transcript from ingest.transcript, or None for a video without captions."""
     t = transcript or {"language": None, "is_generated": None, "segments": []}

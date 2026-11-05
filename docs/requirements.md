@@ -26,7 +26,7 @@ Change a status in the same commit as the code. Never delete a requirement; mark
 
 | ID | Requirement | Status |
 |---|---|---|
-| FR-07 | Streamlit dashboard: time by category per day, learning share by week, hour-by-day heatmap, top creators, platform split. | todo |
+| FR-07 | Streamlit dashboard: time by category per day, learning share by week, hour-by-day heatmap, top creators, platform split. `demo_data.py` builds a sample database to try it on. | passing |
 
 ## Phase 4: Ask your history
 
