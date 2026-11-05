@@ -2,7 +2,7 @@
 
 Track the YouTube videos and Instagram reels you watch, then chart where your time goes and ask questions about what you watched.
 
-> **Status: Phase 2 started.** `load_links.py` saves links with their metadata and watched time to a local SQLite database, and fetches each YouTube video's captions. Classification, the dashboard, RAG and the agent are not built yet. See [docs/requirements.md](docs/requirements.md).
+> **Status: Phase 2 done.** `load_links.py` saves links with their metadata, watched time and YouTube captions to a local SQLite database, and `python -m ingest.classify` labels each video with a local LLM. The dashboard, RAG and the agent are not built yet. See [docs/requirements.md](docs/requirements.md).
 
 ## Prerequisites
 
@@ -41,13 +41,25 @@ Each YouTube video's captions are saved once, with timestamps, in a `transcripts
 
 Everything under `data/` stays on your machine; it is git-ignored.
 
+## Label your videos
+
+Start Ollama, then:
+
+```bash
+python -m ingest.classify
+```
+
+Each video without labels gets a category (Learning, Entertainment, Fitness, News, Music, Other), a format (Lecture, Tutorial, Podcast…) and a short topic, saved in a `labels` table. With a small local model on a laptop CPU, expect about a minute for the first video while the model loads, then 10–30 seconds each. To use Claude instead, `pip install -e ".[anthropic]"`, then set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `.env`.
+
 ## Layout
 
 | Path | Purpose |
 |---|---|
 | `load_links.py` | Capture links or a CSV, fetch metadata with yt-dlp, save to SQLite. |
-| `store/db.py` | SQLite schema (`videos`, `watch_events`, `transcripts`) and writes. |
+| `store/db.py` | SQLite schema (`videos`, `watch_events`, `transcripts`, `labels`) and writes. |
 | `ingest/transcript.py` | Fetch YouTube captions with timestamps, retrying dropped connections. |
+| `ingest/classify.py` | Label videos with category, format and topic. |
+| `llm.py` | The single LLM entry point; `LLM_PROVIDER` switches between Ollama and Anthropic. |
 | `tests/` | Offline tests; yt-dlp is stubbed. |
 | `docs/requirements.md` | Numbered requirements and their status. |
 | `.env.example` | Settings template; copy to `.env` when a phase needs keys. |

@@ -16,6 +16,7 @@ pip install -e ".[dev]"
 pytest                                    # offline, must pass before every commit
 python load_links.py --url "<link>"       # log one link
 python load_links.py --csv <file.csv>     # log a CSV of links
+python -m ingest.classify                 # label unlabelled videos (Ollama must be running)
 ```
 
 ## Current state
@@ -28,14 +29,20 @@ Phase 1 (capture) is done. `load_links.py` saves each viewing to SQLite at `data
 
 Captions for Hindi videos are auto-generated Hinglish in Devanagari script; the console is reconfigured with `errors="replace"` so printing them can't crash a run.
 
-Next is FR-06: LLM classification through the provider switch (see Stack), adding columns to `videos`.
+- `labels` (FR-06): one row per video with `category`, `format`, `topic` and the `model` that produced them, written by `python -m ingest.classify` (a separate command because a local model takes ~10–30 s per video). Labels live in their own table, not in `videos`, so metadata refreshes never touch them and old databases need no migration. Category and format are fixed lists in `ingest/classify.py`; anything else the model returns becomes `Other`.
+
+All LLM calls go through `llm.complete_json(prompt, schema)`. It raises `LLMError` for a bad answer about one item (skip it, carry on) and `LLMUnavailable` when the provider is down or not set up (stop the run).
+
+Next is FR-07: the Streamlit dashboard.
 
 Planned layout as phases land (create folders only when a phase needs them):
 
 ```
 load_links.py        capture (Phase 1)
 store/db.py          SQLite schema and writes (FR-04); Chroma later (FR-08)
-ingest/transcript.py YouTube captions (FR-05); classify, embed later (FR-06, FR-08)
+llm.py               the single LLM entry point and provider switch (FR-06 onwards)
+ingest/transcript.py YouTube captions (FR-05)
+ingest/classify.py   category / format / topic labels (FR-06); embed later (FR-08)
 features/            rag, agent, digest (FR-09..11)
 app.py, pages/       Streamlit dashboard and chat (FR-07, FR-09)
 ```

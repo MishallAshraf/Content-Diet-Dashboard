@@ -17,13 +17,17 @@ dependencies = [
 dev = [
     "pytest>=8.3",
 ]
+# FR-06 onwards: only needed when LLM_PROVIDER=anthropic (local Ollama is the default)
+anthropic = [
+    "anthropic>=1.0",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["load_links"]
+py-modules = ["load_links", "llm"]
 packages = ["store", "ingest"]
 
 [tool.pytest.ini_options]

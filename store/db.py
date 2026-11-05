@@ -45,6 +45,17 @@ CREATE TABLE IF NOT EXISTS transcripts (
     segments     TEXT NOT NULL DEFAULT '[]',   -- JSON list of {start, duration, text}
     fetched_at   TEXT NOT NULL
 );
+
+-- FR-06: LLM labels, one row per video. Kept apart from videos so a metadata refresh
+-- never touches them and existing databases need no migration.
+CREATE TABLE IF NOT EXISTS labels (
+    video_id      TEXT PRIMARY KEY REFERENCES videos(video_id),
+    category      TEXT NOT NULL,
+    format        TEXT NOT NULL,
+    topic         TEXT,
+    model         TEXT NOT NULL,
+    classified_at TEXT NOT NULL
+);
 """
 
 
@@ -86,6 +97,31 @@ def save_viewing(conn, rec):
 def has_transcript(conn, video_id):
     """True once a transcript was fetched, or the video was found to have no captions."""
     return conn.execute("SELECT 1 FROM transcripts WHERE video_id = ?", (video_id,)).fetchone() is not None
+
+
+def transcript_text(conn, video_id, max_chars):
+    """The first max_chars characters of a video's transcript, or '' if there is none."""
+    row = conn.execute("SELECT segments FROM transcripts WHERE video_id = ?", (video_id,)).fetchone()
+    text = " ".join(s["text"] for s in json.loads(row["segments"])) if row else ""
+    return text[:max_chars]
+
+
+def unlabelled_videos(conn):
+    """Videos without labels, oldest first, with tags decoded to a list."""
+    rows = conn.execute(
+        """SELECT v.* FROM videos v LEFT JOIN labels l USING (video_id)
+           WHERE l.video_id IS NULL ORDER BY v.fetched_at""").fetchall()
+    return [{**dict(r), "tags": json.loads(r["tags"])} for r in rows]
+
+
+def save_labels(conn, video_id, labels, model):
+    with conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO labels (video_id, category, format, topic, model, classified_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (video_id, labels["category"], labels["format"], labels["topic"], model,
+             datetime.now().isoformat(timespec="seconds")),
+        )
 
 
 def save_transcript(conn, video_id, transcript):
