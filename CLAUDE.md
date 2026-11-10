@@ -35,7 +35,7 @@ Captions for Hindi videos are auto-generated Hinglish in Devanagari script; the 
 
 All LLM calls go through `llm.complete_json(prompt, schema)`. It raises `LLMError` for a bad answer about one item (skip it, carry on) and `LLMUnavailable` when the provider is down or not set up (stop the run).
 
-- Dashboard (FR-07): `app.py` draws Altair charts from `stats.py`, plain pandas functions over `db.viewings()` so they test without Streamlit and the FR-10 agent can reuse them. `tests/test_app.py` renders the page with Streamlit's `AppTest`. `demo_data.py` fills `data/demo.db` with invented, pre-labelled viewings and refuses to touch the real database.
+- Dashboard (FR-07): `app.py` draws Altair charts from `stats.py`, plain pandas functions over `db.viewings()` so they test without Streamlit and the FR-10 agent can reuse them. `tests/test_app.py` renders the page with Streamlit's `AppTest`. `demo_data.py` fills `data/demo.db` with invented, pre-labelled viewings and refuses to touch the real database. Its labels carry `model = 'demo'`, which turns on the sample-data banner. The page's states (no database, empty, sample, unlabelled, partial week…) are listed in `docs/requirements.md` under FR-07, one test each; keep them in step. Label numbers only with what they measure: time is "time logged" (FR-03 assumes watching to the end).
 
 Next is FR-08: transcript chunks embedded into Chroma.
 

@@ -53,9 +53,23 @@ def test_by_category_per_day(df):
 
 
 def test_learning_share_by_week_starts_monday(df):
-    weekly = stats.learning_share_by_week(df)
+    weekly = stats.learning_share_by_week(df, date(2026, 10, 12), date(2026, 10, 25))
     assert [w.date() for w in weekly["week"]] == [date(2026, 10, 12), date(2026, 10, 19)]
     assert list(weekly["share"].round()) == [75, 0]
+    assert list(weekly["partial"]) == [False, False]
+
+
+def test_weeks_cut_by_the_range_are_partial(df):
+    # The range ends on Monday 19 Oct, so that week is only "so far"; one starting
+    # mid-week cuts the first week too.
+    assert list(stats.learning_share_by_week(df, date(2026, 10, 12), date(2026, 10, 19))["partial"]) == [False, True]
+    assert list(stats.learning_share_by_week(df, date(2026, 10, 13), date(2026, 10, 25))["partial"]) == [True, False]
+
+
+def test_is_sample_only_for_demo_labels(df):
+    assert stats.is_sample(df) is False
+    df.loc[df["video_id"] == "learn", "model"] = "demo"
+    assert stats.is_sample(df) is True
 
 
 def test_hour_by_weekday_fills_every_cell(df):

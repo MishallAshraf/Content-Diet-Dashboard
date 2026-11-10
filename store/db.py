@@ -129,7 +129,7 @@ def viewings(conn):
     Videos not classified yet get category 'Unlabelled'."""
     rows = conn.execute(
         """SELECT e.watched_at, e.watched_sec, v.video_id, v.platform, v.title, v.channel,
-                  COALESCE(l.category, 'Unlabelled') AS category, l.format, l.topic
+                  COALESCE(l.category, 'Unlabelled') AS category, l.format, l.topic, l.model
            FROM watch_events e
            JOIN videos v USING (video_id)
            LEFT JOIN labels l USING (video_id)

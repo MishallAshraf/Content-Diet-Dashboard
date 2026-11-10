@@ -27,13 +27,28 @@ Change a status in the same commit as the code. Never delete a requirement; mark
 | ID | Requirement | Status |
 |---|---|---|
 | FR-07 | Streamlit dashboard: time by category per day, learning share by week, hour-by-day heatmap, top creators, platform split. `demo_data.py` builds a sample database to try it on. | passing |
+| FR-14 | Drill-downs: clicking a category, heatmap cell or creator lists the videos behind it, each linking back to the video at its start time. Date range and platforms live in the URL, so a view survives a refresh and can be bookmarked. | todo |
+
+Dashboard states (FR-07). Each row has a test; numbers carry only labels they support.
+
+| State | What the page shows |
+|---|---|
+| No database file | How to log a link or build the sample; the file is not created. |
+| Database with no viewings | How to log a link. |
+| Nothing in the picked dates or platforms | "Nothing watched in this range." |
+| Sample data (labels from `demo_data.py`) | A banner saying it is made-up data, above everything else. |
+| Some viewings unlabelled | They chart as Unlabelled, are left out of the learning share, and a caption says how to label them. |
+| Nothing labelled | Learning share shows n/a. |
+| Week only partly inside the range | Drawn dashed, labelled "so far", so a short week doesn't read as a drop. |
+| Time | Labelled "time logged": from the link's start time to the end of the video (FR-03), not measured viewing. |
+| Known figures | The sample built with a fixed seed and end date reproduces exact totals, so a change to the numbers is caught. |
 
 ## Phase 4: Ask your history
 
 | ID | Requirement | Status |
 |---|---|---|
 | FR-08 | Split transcripts into ~500-token chunks that keep their start time, embed them with a multilingual model and store them in Chroma. | todo |
-| FR-09 | Answer questions from the top-k chunks, citing video and timestamp. | todo |
+| FR-09 | Answer questions from the top-k chunks, citing video and timestamp. Each citation quotes the transcript, and a quote not found in the retrieved chunk is marked unverified. The answer shape (text plus citations) is defined in one place. A short design note and mockup of the chat page are agreed before code. | todo |
 
 ## Phase 5: Agent and digest
 
@@ -56,3 +71,4 @@ Change a status in the same commit as the code. Never delete a requirement; mark
 | NFR-02 | One bad link never stops a bulk import; failures are reported and skipped. | passing |
 | NFR-03 | Runs locally on one machine: no server, no hosted database. | passing |
 | NFR-04 | Tests run offline: network calls (yt-dlp, LLMs) are stubbed. | passing |
+| NFR-05 | Every LLM feature has a small fixed test set and a pass bar before a model becomes its default: ~30 hand-labelled videos for FR-06, ~15 questions with known answer videos for FR-09. Each model tried gets a results row. | todo |

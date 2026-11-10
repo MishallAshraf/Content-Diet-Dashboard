@@ -3,14 +3,17 @@
 Kept apart from app.py so they can be tested without Streamlit, and reused by
 the agent's query_stats tool later (FR-10). Time is counted in watched minutes.
 """
+from datetime import timedelta
+
 import pandas as pd
 
+import demo_data
 from ingest.classify import CATEGORIES
 
 CATEGORY_ORDER = [*CATEGORIES, "Unlabelled"]
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 COLUMNS = ["watched_at", "watched_sec", "video_id", "platform", "title", "channel",
-           "category", "format", "topic"]
+           "category", "format", "topic", "model"]
 
 
 def frame(rows):
@@ -32,6 +35,11 @@ def between(df, start, end, platforms=None):
     if platforms is not None:
         keep &= df["platform"].isin(platforms)
     return df[keep]
+
+
+def is_sample(df):
+    """True when any label came from demo_data.py rather than a model."""
+    return bool((df["model"] == demo_data.MODEL).any())
 
 
 def learning_share(df):
@@ -57,10 +65,13 @@ def by_category_per_day(df):
     return df.groupby(["day", "category"], as_index=False)["minutes"].sum()
 
 
-def learning_share_by_week(df):
-    """One row per week with the Learning share of labelled minutes."""
-    weeks = [{"week": week, "share": learning_share(g)} for week, g in df.groupby("week")]
-    return pd.DataFrame(weeks, columns=["week", "share"]).dropna()
+def learning_share_by_week(df, start, end):
+    """One row per week with the Learning share of labelled minutes. `partial` marks a week
+    that runs past either end of the start..end range, so its share is only "so far"."""
+    weeks = [{"week": week, "share": learning_share(g),
+              "partial": week.date() < start or (week + timedelta(days=6)).date() > end}
+             for week, g in df.groupby("week")]
+    return pd.DataFrame(weeks, columns=["week", "share", "partial"]).dropna()
 
 
 def hour_by_weekday(df):

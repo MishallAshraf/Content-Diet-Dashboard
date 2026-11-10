@@ -9,6 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import altair as alt
+import pandas as pd
 import streamlit as st
 
 import stats
@@ -49,6 +50,19 @@ def color(field, palette, present):
                      legend=alt.Legend(orient="bottom", title=None))
 
 
+def week_lines(weekly, x, y, colour):
+    """One segment per pair of neighbouring weeks, dashed when either week is partial."""
+    rows = []
+    for i in range(len(weekly) - 1):
+        a, b = weekly.iloc[i], weekly.iloc[i + 1]
+        dashed = bool(a["partial"] or b["partial"])
+        rows += [{"week": w["week"], "share": w["share"], "segment": i, "dashed": dashed} for w in (a, b)]
+    segments = pd.DataFrame(rows, columns=["week", "share", "segment", "dashed"])
+    return alt.Chart(segments).mark_line(color=colour).encode(
+        x=x, y=y, detail="segment:N",
+        strokeDash=alt.condition("datum.dashed", alt.value([5, 4]), alt.value([1, 0])))
+
+
 st.set_page_config(page_title="Content Diet", layout="wide")
 st.title("Content Diet")
 
@@ -62,6 +76,9 @@ df = load(path, path.stat().st_mtime)
 if df.empty:
     st.info("No viewings logged yet. Add some with `python load_links.py`.")
     st.stop()
+if stats.is_sample(df):
+    st.warning("**Sample data.** These viewings are made up by `demo_data.py`; none of this is your "
+               "history. Run `streamlit run app.py` without `--db` to see your own.")
 
 with st.sidebar:
     st.caption(f"Database: `{path.name}`")
@@ -79,7 +96,9 @@ if view.empty:
 days = (end - start).days + 1
 t = stats.totals(view, days)
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Time watched", duration(t["minutes"]))
+c1.metric("Time logged", duration(t["minutes"]),
+          help="From each link's start time to the end of the video. "
+               "It assumes you watched to the end, so real viewing may be shorter.")
 c2.metric("Per day", duration(t["minutes_per_day"]))
 c3.metric("Videos", t["videos"], help=f"{t['viewings']} viewings, rewatches included")
 c4.metric("Learning share", "n/a" if t["learning_share"] is None else f"{t['learning_share']:.0f}%")
@@ -104,16 +123,18 @@ st.altair_chart(
 left, right = st.columns(2)
 with left:
     st.subheader("Learning share by week")
-    weekly = stats.learning_share_by_week(view)
-    st.altair_chart(
-        alt.Chart(weekly).mark_line(point=True, color=CATEGORY_COLORS["Learning"]).encode(
-            x=alt.X("week:T", title="Week of", axis=alt.Axis(format="%d %b")),
-            y=alt.Y("share:Q", title="% of labelled time", scale=alt.Scale(domain=[0, 100])),
-            tooltip=[alt.Tooltip("week:T", title="Week of", format="%d %b"),
-                     alt.Tooltip("share:Q", title="Learning %", format=".0f")],
-        ).properties(height=260),
-        width="stretch",
-    )
+    weekly = stats.learning_share_by_week(view, start, end)
+    weekly["label"] = weekly["partial"].map({True: "so far", False: "full week"})
+    x = alt.X("week:T", title="Week of", axis=alt.Axis(format="%d %b"))
+    y = alt.Y("share:Q", title="% of labelled time", scale=alt.Scale(domain=[0, 100]))
+    learning = CATEGORY_COLORS["Learning"]
+    points = alt.Chart(weekly).mark_point(filled=True, size=60, color=learning).encode(
+        x=x, y=y, opacity=alt.condition("datum.partial", alt.value(0.45), alt.value(1)),
+        tooltip=[alt.Tooltip("week:T", title="Week of", format="%d %b"),
+                 alt.Tooltip("share:Q", title="Learning %", format=".0f"), alt.Tooltip("label", title="")])
+    st.altair_chart((week_lines(weekly, x, y, learning) + points).properties(height=260), width="stretch")
+    if weekly["partial"].any():
+        st.caption("Dashed: a week only partly inside the dates, so its share is so far, not final.")
 with right:
     st.subheader("Platform split")
     split = stats.platform_split(view)

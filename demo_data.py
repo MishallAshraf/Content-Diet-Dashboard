@@ -16,6 +16,7 @@ from pathlib import Path
 from store import db
 
 DEMO_DB = db.DEFAULT_DB.with_name("demo.db")
+MODEL = "demo"  # the labels' model column; the dashboard shows a sample-data banner when it sees it
 
 # (platform, title, channel, minutes, category, format, topic)
 CATALOG = [
@@ -105,17 +106,19 @@ def viewings(days=28, end=None, seed=7):
     return out
 
 
-def build(path=DEMO_DB, days=28, seed=7):
+def build(path=DEMO_DB, days=28, seed=7, end=None):
     path = Path(path)
     if path.resolve() == db.DEFAULT_DB.resolve():
         raise SystemExit("Refusing to overwrite your real database; pick another --db.")
     path.unlink(missing_ok=True)
     conn = db.connect(path)
-    recs = viewings(days, seed=seed)
+    recs = viewings(days, end=end, seed=seed)
     for rec in recs:
         db.save_viewing(conn, rec)
+    watched = {rec["video_id"] for rec in recs}
     for v in videos():
-        db.save_labels(conn, v["video_id"], v["labels"], model="demo")
+        if v["video_id"] in watched:  # a video never picked has no row to label
+            db.save_labels(conn, v["video_id"], v["labels"], model=MODEL)
     conn.close()
     return len(recs)
 
