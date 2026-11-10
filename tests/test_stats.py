@@ -7,10 +7,10 @@ import stats
 from store import db
 
 
-def rec(video_id, watched_at, minutes, platform="youtube", channel="A"):
-    return {"video_id": video_id, "platform": platform, "url": f"https://example.com/{video_id}",
+def rec(video_id, watched_at, minutes, platform="youtube", channel="A", start=0):
+    return {"video_id": video_id, "platform": platform, "url": f"https://www.youtube.com/watch?v={video_id}&t=5",
             "title": video_id, "channel": channel, "duration_sec": minutes * 60, "language": "en",
-            "tags": [], "description": "", "watched_at": watched_at, "start_offset_sec": 0,
+            "tags": [], "description": "", "watched_at": watched_at, "start_offset_sec": start,
             "watched_sec": minutes * 60}
 
 
@@ -18,7 +18,7 @@ def rec(video_id, watched_at, minutes, platform="youtube", channel="A"):
 def df(tmp_path):
     conn = db.connect(tmp_path / "t.db")
     db.save_viewing(conn, rec("learn", "2026-10-12T21:00:00", 30))                    # Mon, week 1
-    db.save_viewing(conn, rec("learn", "2026-10-13T21:00:00", 30))                    # rewatch
+    db.save_viewing(conn, rec("learn", "2026-10-13T21:00:00", 30, start=40))          # rewatch from 0:40
     db.save_viewing(conn, rec("fun", "2026-10-13T23:30:00", 20, "instagram", "B"))   # Tue
     db.save_viewing(conn, rec("fun", "2026-10-19T23:10:00", 10, "instagram", "B"))   # Mon, week 2
     db.save_viewing(conn, rec("new", "2026-10-19T08:00:00", 5))                       # not labelled
@@ -93,3 +93,39 @@ def test_top_creators_and_platform_split(df):
 def test_between_filters_dates_and_platforms(df):
     assert len(stats.between(df, date(2026, 10, 13), date(2026, 10, 13))) == 2
     assert len(stats.between(df, date(2026, 10, 1), date(2026, 10, 31), ["instagram"])) == 2
+
+
+# FR-14: drill-downs
+
+def test_matching_a_day_and_category(df):
+    picked = stats.matching(df, [{"date": "2026-10-13", "category": "Learning"}])
+    assert list(picked["video_id"]) == ["learn"]
+
+
+def test_matching_any_of_several_picks_and_none_means_all(df):
+    picks = [{"weekday": "Mon", "hour": 23}, {"weekday": "Tue", "hour": 23}]
+    assert sorted(stats.matching(df, picks)["watched_at"].dt.day) == [13, 19]
+    assert len(stats.matching(df, [])) == len(df)
+    assert set(stats.matching(df, [{"channel": "B"}])["video_id"]) == {"fun"}
+
+
+def test_videos_groups_viewings_and_links_to_latest_start(df):
+    table = stats.videos(df).set_index("title")
+    assert list(table.index) == ["learn", "fun", "new"]  # most minutes first
+    assert table.loc["learn", "viewings"] == 2
+    assert table.loc["learn", "minutes"] == 60
+    # the latest viewing started at 0:40; the link's old t=5 is replaced
+    assert table.loc["learn", "link"] == "https://www.youtube.com/watch?v=learn&t=40s"
+    assert stats.videos(df.iloc[0:0]).empty
+
+
+def test_watch_link_leaves_reels_and_zero_starts_alone():
+    reel = "https://www.instagram.com/reel/abc/"
+    assert stats.watch_link(reel, "instagram", 30) == reel
+    assert stats.watch_link("https://youtu.be/x", "youtube", 0) == "https://youtu.be/x"
+
+
+def test_describe_picks():
+    assert stats.describe({"date": "2026-10-23", "category": "Music"}) == "Music on Fri 23 Oct"
+    assert stats.describe({"weekday": "Fri", "hour": 23}) == "Fri 23:00–24:00"
+    assert stats.describe({"channel": "Quiet Strings"}) == "Quiet Strings"

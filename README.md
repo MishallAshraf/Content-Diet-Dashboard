@@ -57,7 +57,7 @@ Each video without labels gets a category (Learning, Entertainment, Fitness, New
 streamlit run app.py
 ```
 
-It opens in your browser at `http://localhost:8501` and shows time by category per day, your learning share by week, when you watch (hour by weekday), top creators and the YouTube/Instagram split, for the dates and platforms you pick in the sidebar. New links show up when you refresh the page.
+It opens in your browser at `http://localhost:8501` and shows time by category per day, your learning share by week, when you watch (hour by weekday), top creators and the YouTube/Instagram split, for the dates and platforms you pick in the sidebar. Click a bar, a heatmap cell or a creator to list the videos behind it, each with a link that opens where you started watching. The dates and platforms are kept in the page address, so a refresh or a bookmark keeps your view. New links show up when you refresh the page.
 
 No history yet? Try it on four weeks of made-up viewings:
 

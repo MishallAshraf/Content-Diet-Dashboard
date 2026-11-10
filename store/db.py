@@ -128,7 +128,8 @@ def viewings(conn):
     """FR-07: every watch event with its video and labels, oldest first.
     Videos not classified yet get category 'Unlabelled'."""
     rows = conn.execute(
-        """SELECT e.watched_at, e.watched_sec, v.video_id, v.platform, v.title, v.channel,
+        """SELECT e.watched_at, e.watched_sec, e.start_offset_sec, v.video_id, v.platform, v.url,
+                  v.title, v.channel,
                   COALESCE(l.category, 'Unlabelled') AS category, l.format, l.topic, l.model
            FROM watch_events e
            JOIN videos v USING (video_id)

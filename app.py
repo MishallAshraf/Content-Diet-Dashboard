@@ -5,7 +5,7 @@
 """
 import argparse
 import sys
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import altair as alt
@@ -63,6 +63,25 @@ def week_lines(weekly, x, y, colour):
         strokeDash=alt.condition("datum.dashed", alt.value([5, 4]), alt.value([1, 0])))
 
 
+def from_url(first, last, default_start, all_platforms):
+    """FR-14: the dates and platforms in the URL, clamped to what's logged, else the defaults."""
+    qp = st.query_params
+    try:
+        start, end = date.fromisoformat(qp["from"]), date.fromisoformat(qp["to"])
+        start = min(max(start, first), last)
+        end = min(max(end, start), last)
+    except (KeyError, ValueError):
+        start, end = default_start, last
+    platforms = all_platforms if "platforms" not in qp else [
+        p for p in qp["platforms"].split(",") if p in all_platforms]
+    return (start, end), platforms
+
+
+def clicks(event, name):
+    """The picks of a chart's named point selection, e.g. [{"channel": "A"}]."""
+    return list(event.selection.get(name, [])) if event else []
+
+
 st.set_page_config(page_title="Content Diet", layout="wide")
 st.title("Content Diet")
 
@@ -83,10 +102,14 @@ if stats.is_sample(df):
 with st.sidebar:
     st.caption(f"Database: `{path.name}`")
     first, last = df["day"].min().date(), df["day"].max().date()
-    default_start = max(first, last - timedelta(days=27))
-    picked = st.date_input("Dates", (default_start, last), min_value=first, max_value=last)
+    all_platforms = sorted(df["platform"].unique())
+    if "dates" not in st.session_state:  # first run: start from the URL, so a bookmark or refresh keeps the view
+        st.session_state["dates"], st.session_state["platforms"] = from_url(
+            first, last, max(first, last - timedelta(days=27)), all_platforms)
+    picked = st.date_input("Dates", key="dates", min_value=first, max_value=last)
     start, end = (picked if len(picked) == 2 else (picked[0], picked[0]))
-    platforms = st.multiselect("Platforms", sorted(df["platform"].unique()), default=sorted(df["platform"].unique()))
+    platforms = st.multiselect("Platforms", all_platforms, key="platforms")
+    st.query_params.from_dict({"from": start.isoformat(), "to": end.isoformat(), "platforms": ",".join(platforms)})
 
 view = stats.between(df, start, end, platforms)
 if view.empty:
@@ -107,17 +130,23 @@ if t["unlabelled"]:
                "They show as Unlabelled and don't count toward the learning share.")
 
 st.subheader("Time by category per day")
+# Chart picks can't be reset through session state, so Clear bumps this number, which is
+# part of each chart's key: the charts come back as new widgets with nothing picked.
+round_ = st.session_state.setdefault("pick_round", 0)
+
 daily = stats.by_category_per_day(view)
-st.altair_chart(
+pick_day = alt.selection_point(name="day_category", fields=["date", "category"])
+by_day = st.altair_chart(
     alt.Chart(daily).mark_bar().encode(
         x=alt.X("day:T", title=None, axis=alt.Axis(format="%d %b")),
         y=alt.Y("minutes:Q", title="Minutes", stack=True),
         color=color("category", CATEGORY_COLORS, daily["category"]),
         order=alt.Order("category:N"),
+        opacity=alt.condition(pick_day, alt.value(1), alt.value(0.3)),
         tooltip=[alt.Tooltip("day:T", format="%a %d %b"), "category",
                  alt.Tooltip("minutes:Q", format=".0f")],
-    ).properties(height=280),
-    width="stretch",
+    ).add_params(pick_day).properties(height=280),
+    width="stretch", on_select="rerun", key=f"by_day_{round_}",
 )
 
 left, right = st.columns(2)
@@ -151,24 +180,56 @@ left, right = st.columns(2)
 with left:
     st.subheader("When you watch")
     grid = stats.hour_by_weekday(view)
-    st.altair_chart(
+    pick_hour = alt.selection_point(name="weekday_hour", fields=["weekday", "hour"])
+    by_hour = st.altair_chart(
         alt.Chart(grid).mark_rect().encode(
             x=alt.X("hour:O", title="Hour of day"),
             y=alt.Y("weekday:O", title=None, sort=stats.WEEKDAYS),
             color=alt.Color("minutes:Q", title="Minutes", scale=alt.Scale(range=["#f3f6fa", "#1d4e89"])),
+            stroke=alt.condition(pick_hour, alt.value("#e76f51"), alt.value(None), empty=False),
+            strokeWidth=alt.condition(pick_hour, alt.value(2), alt.value(0), empty=False),
             tooltip=["weekday", "hour", alt.Tooltip("minutes:Q", format=".0f")],
-        ).properties(height=260),
-        width="stretch",
+        ).add_params(pick_hour).properties(height=260),
+        width="stretch", on_select="rerun", key=f"by_hour_{round_}",
     )
 with right:
     st.subheader("Top creators")
     creators = stats.top_creators(view)
-    st.altair_chart(
+    pick_creator = alt.selection_point(name="creator", fields=["channel"])
+    by_creator = st.altair_chart(
         alt.Chart(creators).mark_bar().encode(
             x=alt.X("minutes:Q", title="Minutes"),
             y=alt.Y("channel:N", title=None, sort="-x", axis=alt.Axis(labelLimit=160, labelOverlap=False)),
             color=color("platform", PLATFORM_COLORS, creators["platform"]),
+            opacity=alt.condition(pick_creator, alt.value(1), alt.value(0.3)),
             tooltip=["channel", "platform", alt.Tooltip("minutes:Q", format=".0f"), "videos"],
-        ).properties(height=max(260, 28 * len(creators))),
-        width="stretch",
+        ).add_params(pick_creator).properties(height=max(260, 28 * len(creators))),
+        width="stretch", on_select="rerun", key=f"by_creator_{round_}",
+    )
+
+st.subheader("Videos")
+chosen, said = view, []
+for picks in (clicks(by_day, "day_category"), clicks(by_hour, "weekday_hour"), clicks(by_creator, "creator")):
+    chosen = stats.matching(chosen, picks)
+    said += [stats.describe(p) for p in picks]
+if said:
+    text, button = st.columns([5, 1], vertical_alignment="center")
+    text.caption(f"Showing {' and '.join(said)}.")
+    button.button("Clear", on_click=lambda: st.session_state.update(pick_round=round_ + 1),
+                  help="Clear the picks in every chart")
+else:
+    st.caption("Everything in the dates above. Click a bar, a heatmap cell or a creator to narrow the list.")
+if said and chosen.empty:
+    st.info("No video matches all of these picks together. Clear them and pick one at a time.")
+else:
+    st.dataframe(
+        stats.videos(chosen), hide_index=True, width="stretch",
+        column_config={
+            "title": "Title", "channel": "Channel", "category": "Category", "format": "Format",
+            "minutes": st.column_config.NumberColumn("Minutes", format="%.0f"),
+            "viewings": st.column_config.NumberColumn("Times", help="Viewings in the dates, rewatches included"),
+            "last_watched": st.column_config.DatetimeColumn("Last watched", format="D MMM, HH:mm"),
+            "link": st.column_config.LinkColumn("Watch", display_text="Open",
+                                                help="Opens where you started watching"),
+        },
     )

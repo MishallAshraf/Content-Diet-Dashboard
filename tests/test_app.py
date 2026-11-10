@@ -13,9 +13,11 @@ from store import db
 END = date(2026, 11, 1)  # a Sunday, so the sample's four weeks are all full weeks
 
 
-def run_app(monkeypatch, db_file):
+def run_app(monkeypatch, db_file, **query):
     monkeypatch.setattr(sys, "argv", ["app.py", "--db", str(db_file)])
     at = AppTest.from_file("../app.py", default_timeout=120)
+    for k, v in query.items():
+        at.query_params[k] = v
     at.run()
     assert not at.exception, at.exception
     return at
@@ -75,7 +77,10 @@ def test_sample_data_shows_banner_and_every_chart(tmp_path, monkeypatch):
     assert "Sample data" in at.warning[0].value
     assert [m.label for m in at.metric] == ["Time logged", "Per day", "Videos", "Learning share"]
     assert [s.value for s in at.subheader] == ["Time by category per day", "Learning share by week",
-                                               "Platform split", "When you watch", "Top creators"]
+                                               "Platform split", "When you watch", "Top creators", "Videos"]
+    # FR-14: with nothing clicked, the list holds every video in the dates
+    assert len(at.dataframe[0].value) == 28
+    assert "Click a bar" in texts(at.caption)
 
 
 def test_no_database_explains_and_creates_nothing(tmp_path, monkeypatch):
@@ -117,3 +122,31 @@ def test_partial_week_is_explained(tmp_path, monkeypatch):
     # own_db's viewings end on Tuesday 13 Oct, so the range ends mid-week.
     at = run_app(monkeypatch, own_db(tmp_path / "own.db"))
     assert "so far" in texts(at.caption)
+
+
+# FR-14: filters in the URL
+
+def test_url_sets_dates_and_platforms(tmp_path, monkeypatch):
+    path = tmp_path / "demo.db"
+    demo_data.build(path, end=END)
+    at = run_app(monkeypatch, path, **{"from": "2026-10-26", "to": "2026-11-01", "platforms": "instagram"})
+    assert at.date_input[0].value == (date(2026, 10, 26), date(2026, 11, 1))
+    assert at.multiselect[0].value == ["instagram"]
+    assert set(at.dataframe[0].value["channel"]) <= {"devmemes.daily", "pawsandclaws", "code.with.rhea",
+                                                     "move.daily", "wanderplates", "quietstrings", "laughtrackclub"}
+
+
+def test_changing_filters_updates_the_url(tmp_path, monkeypatch):
+    at = run_app(monkeypatch, own_db(tmp_path / "own.db"))
+    assert at.query_params["from"] == "2026-10-12"
+    at.multiselect[0].set_value([]).run()
+    assert at.query_params["platforms"] == ""
+
+
+def test_bad_or_out_of_range_url_falls_back(tmp_path, monkeypatch):
+    path = own_db(tmp_path / "own.db")
+    at = run_app(monkeypatch, path, **{"from": "yesterday", "to": "2026-10-13"})
+    assert at.date_input[0].value == (date(2026, 10, 12), date(2026, 10, 13))
+    at = run_app(monkeypatch, path, **{"from": "2020-01-01", "to": "2030-01-01", "platforms": "tiktok,youtube"})
+    assert at.date_input[0].value == (date(2026, 10, 12), date(2026, 10, 13))  # clamped to what's logged
+    assert at.multiselect[0].value == ["youtube"]  # unknown platforms dropped

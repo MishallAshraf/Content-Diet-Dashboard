@@ -4,6 +4,7 @@ Kept apart from app.py so they can be tested without Streamlit, and reused by
 the agent's query_stats tool later (FR-10). Time is counted in watched minutes.
 """
 from datetime import timedelta
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 
@@ -12,8 +13,11 @@ from ingest.classify import CATEGORIES
 
 CATEGORY_ORDER = [*CATEGORIES, "Unlabelled"]
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-COLUMNS = ["watched_at", "watched_sec", "video_id", "platform", "title", "channel",
-           "category", "format", "topic", "model"]
+COLUMNS = ["watched_at", "watched_sec", "start_offset_sec", "video_id", "platform", "url",
+           "title", "channel", "category", "format", "topic", "model"]
+# FR-14: the fields a chart click can pick, and the column each one matches.
+PICK_FIELDS = {"date": "date", "category": "category", "weekday": "weekday_name",
+               "hour": "hour", "channel": "channel"}
 
 
 def frame(rows):
@@ -24,7 +28,9 @@ def frame(rows):
     df["minutes"] = df["watched_sec"] / 60
     df["day"] = at.dt.normalize()
     df["week"] = at.dt.to_period("W-SUN").dt.start_time  # weeks start on Monday
+    df["date"] = at.dt.strftime("%Y-%m-%d")  # a plain string, so a chart click returns it unchanged
     df["weekday"] = at.dt.day_of_week
+    df["weekday_name"] = df["weekday"].map(dict(enumerate(WEEKDAYS)))
     df["hour"] = at.dt.hour
     return df
 
@@ -62,7 +68,7 @@ def totals(df, days):
 
 def by_category_per_day(df):
     """One row per (day, category) with the minutes watched."""
-    return df.groupby(["day", "category"], as_index=False)["minutes"].sum()
+    return df.groupby(["day", "date", "category"], as_index=False)["minutes"].sum()
 
 
 def learning_share_by_week(df, start, end):
@@ -94,3 +100,52 @@ def top_creators(df, n=10):
 
 def platform_split(df):
     return df.groupby("platform", as_index=False).agg(minutes=("minutes", "sum"), viewings=("video_id", "size"))
+
+
+# FR-14: drill-downs from a chart click to the videos behind it
+
+def matching(df, picks):
+    """Viewings matching any of a chart's picks, e.g. [{"date": "2026-10-23", "category": "Music"}].
+    No picks means no filter."""
+    if not picks:
+        return df
+    keep = pd.Series(False, index=df.index)
+    for pick in picks:
+        hit = pd.Series(True, index=df.index)
+        for field, value in pick.items():
+            if field in PICK_FIELDS:
+                hit &= df[PICK_FIELDS[field]] == value
+        keep |= hit
+    return df[keep]
+
+
+def describe(pick):
+    """A chart pick in words: {"date": "2026-10-23", "category": "Music"} -> "Music on Fri 23 Oct"."""
+    if "date" in pick:
+        return f"{pick.get('category', 'everything')} on {pd.Timestamp(pick['date']):%a %d %b}"
+    if "hour" in pick:
+        return f"{pick.get('weekday', 'any day')} {int(pick['hour']):02d}:00–{int(pick['hour']) + 1:02d}:00"
+    return pick.get("channel", "")
+
+
+def watch_link(url, platform, start_sec):
+    """The video's link, starting where you started watching (YouTube only; reels play from 0)."""
+    if platform != "youtube" or not start_sec:
+        return url
+    scheme, netloc, path, query, _ = urlsplit(url)
+    params = [(k, v) for k, v in parse_qsl(query) if k != "t"] + [("t", f"{int(start_sec)}s")]
+    return urlunsplit((scheme, netloc, path, urlencode(params), ""))
+
+
+def videos(df):
+    """One row per video, most watched first, linking to where its latest viewing started."""
+    if df.empty:
+        return pd.DataFrame(columns=["title", "channel", "category", "format", "minutes", "viewings",
+                                     "last_watched", "link"])
+    latest = df.sort_values("watched_at").groupby("video_id").tail(1).set_index("video_id")
+    out = (df.groupby("video_id")
+             .agg(minutes=("minutes", "sum"), viewings=("watched_at", "size"), last_watched=("watched_at", "max"))
+             .join(latest[["title", "channel", "category", "format", "url", "platform", "start_offset_sec"]]))
+    out["link"] = [watch_link(u, p, s) for u, p, s in zip(out["url"], out["platform"], out["start_offset_sec"])]
+    return (out.sort_values("minutes", ascending=False).reset_index()
+               [["title", "channel", "category", "format", "minutes", "viewings", "last_watched", "link"]])

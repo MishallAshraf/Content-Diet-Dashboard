@@ -27,7 +27,7 @@ Change a status in the same commit as the code. Never delete a requirement; mark
 | ID | Requirement | Status |
 |---|---|---|
 | FR-07 | Streamlit dashboard: time by category per day, learning share by week, hour-by-day heatmap, top creators, platform split. `demo_data.py` builds a sample database to try it on. | passing |
-| FR-14 | Drill-downs: clicking a category, heatmap cell or creator lists the videos behind it, each linking back to the video at its start time. Date range and platforms live in the URL, so a view survives a refresh and can be bookmarked. | todo |
+| FR-14 | Drill-downs: clicking a category, heatmap cell or creator lists the videos behind it, each linking back to the video at its start time. Date range and platforms live in the URL, so a view survives a refresh and can be bookmarked. | passing (the filtering, links and URL are tested; the chart clicks themselves were checked by hand, as Streamlit's test runner can't click a chart) |
 
 Dashboard states (FR-07). Each row has a test; numbers carry only labels they support.
 
@@ -36,6 +36,8 @@ Dashboard states (FR-07). Each row has a test; numbers carry only labels they su
 | No database file | How to log a link or build the sample; the file is not created. |
 | Database with no viewings | How to log a link. |
 | Nothing in the picked dates or platforms | "Nothing watched in this range." |
+| Chart picks that match no video together (FR-14) | "No video matches all of these picks together", and a Clear button. |
+| Dates or platforms in the URL that are invalid or outside the logged days (FR-14) | Clamped to the logged days; unknown platforms dropped; unreadable dates fall back to the last four weeks. |
 | Sample data (labels from `demo_data.py`) | A banner saying it is made-up data, above everything else. |
 | Some viewings unlabelled | They chart as Unlabelled, are left out of the learning share, and a caption says how to label them. |
 | Nothing labelled | Learning share shows n/a. |
